@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso al Pastelómetro</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+        }
+        
+        h1 {
+            color: #e74c3c;
+            margin-bottom: 20px;
+        }
+        
+        .logo {
+            width: 100px;
+            height: auto;
+            margin-bottom: 20px;
+        }
+        
+        .input-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        
+        button {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            width: 100%;
+        }
+        
+        button:hover {
+            background-color: #c0392b;
+        }
+        
+        .info {
+            margin-top: 25px;
+            font-size: 14px;
+            color: #666;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+        }
+        
+        .error {
+            color: #e74c3c;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        
+        .success {
+            color: #27ae60;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .attempts-warning {
+            color: #f39c12;
+            font-weight: bold;
+        }
+        
+        .loading {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #e74c3c;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Acceso al Pastelómetro</h1>
+        
+        <div id="login-section">
+            <div class="input-group">
+                <label for="access-code">Código de Acceso</label>
+                <input type="text" id="access-code" placeholder="Ingrese su código (ej. PAST-XXXX-XXXX-XXXX-XXXX)" maxlength="24">
+            </div>
+            
+            <button id="login-btn">Acceder</button>
+            <div id="error-message" class="error hidden"></div>
+            <div id="success-message" class="success hidden"></div>
+            
+            <div class="info">
+                <p><strong>Horario de atención:</strong> 8:00 AM - 4:00 PM</p>
+                <p><strong>Soporte técnico:</strong> 0412-5278450</p>
+            </div>
+        </div>
+        
+        <div id="loading-section" class="hidden">
+            <div class="loading"></div>
+            <p>Verificando acceso...</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Elementos del DOM
+            const accessCodeInput = document.getElementById('access-code');
+            const loginBtn = document.getElementById('login-btn');
+            const errorMessage = document.getElementById('error-message');
+            const successMessage = document.getElementById('success-message');
+            const loginSection = document.getElementById('login-section');
+            const loadingSection = document.getElementById('loading-section');
+            
+            // Expresión regular para validar el formato del código
+            const codeRegex = /^PAST-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
+            
+            // Lista de códigos válidos (en un caso real, esto debería estar encriptado o ser más seguro)
+            const validCodes = [
+                "PAST-1A2B-3C4D-5E6F-7G8H", "PAST-9I0J-K1L2-M3N4-O5P6",
+                "PAST-Q7R8-S9T0-U1V2-W3X4", "PAST-Y5Z6-A7B8-C9D0-E1F2",
+                "PAST-G3H4-I5J6-K7L8-M9N0", "PAST-O1P2-Q3R4-S5T6-U7V8",
+                "PAST-W9X0-Y1Z2-A3B4-C5D6", "PAST-E7F8-G9H0-I1J2-K3L4",
+                "PAST-M5N6-O7P8-Q9R0-S1T2", "PAST-U3V4-W5X6-Y7Z8-A9B0",
+                "PAST-C1D2-E3F4-G5H6-I7J8", "PAST-K9L0-M1N2-O3P4-Q5R6",
+                "PAST-S7T8-U9V0-W1X2-Y3Z4", "PAST-A5B6-C7D8-E9F0-G1H2",
+                "PAST-I3J4-K5L6-M7N8-O9P0", "PAST-Q1R2-S3T4-U5V6-W7X8",
+                "PAST-Y9Z0-A1B2-C3D4-E5F6", "PAST-G7H8-I9J0-K1L2-M3N4",
+                "PAST-O5P6-Q7R8-S9T0-U1V2", "PAST-W3X4-Y5Z6-A7B8-C9D0",
+                "PAST-E1F2-G3H4-I5J6-K7L8", "PAST-M9N0-O1P2-Q3R4-S5T6",
+                "PAST-U7V8-W9X0-Y1Z2-A3B4", "PAST-C5D6-E7F8-G9H0-I1J2",
+                "PAST-K3L4-M5N6-O7P8-Q9R0", "PAST-S1T2-U3V4-W5X6-Y7Z8",
+                "PAST-A9B0-C1D2-E3F4-G5H6", "PAST-I7J8-K9L0-M1N2-O3P4",
+                "PAST-Q5R6-S7T8-U9V0-W1X2", "PAST-Y3Z4-A5B6-C7D8-E9F0",
+                "PAST-G1H2-I3J4-K5L6-M7N8", "PAST-O9P0-Q1R2-S3T4-U5V6",
+                "PAST-W7X8-Y9Z0-A1B2-C3D4", "PAST-E5F6-G7H8-I9J0-K1L2",
+                "PAST-M3N4-O5P6-Q7R8-S9T0", "PAST-U1V2-W3X4-Y5Z6-A7B8",
+                "PAST-C9D0-E1F2-G3H4-I5J6", "PAST-K7L8-M9N0-O1P2-Q3R4",
+                "PAST-S5T6-U7V8-W9X0-Y1Z2", "PAST-A3B4-C5D6-E7F8-G9H0",
+                "PAST-I1J2-K3L4-M5N6-O7P8", "PAST-Q9R0-S1T2-U3V4-W5X6",
+                "PAST-Y7Z8-A9B0-C1D2-E3F4", "PAST-G5H6-I7J8-K9L0-M1N2",
+                "PAST-O3P4-Q5R6-S7T8-U9V0", "PAST-W1X2-Y3Z4-A5B6-C7D8",
+                "PAST-E9F0-G1H2-I3J4-K5L6", "PAST-M7N8-O9P0-Q1R2-S3T4",
+                "PAST-U5V6-W7X8-Y9Z0-A1B2", "PAST-C3D4-E5F6-G7H8-I9J0",
+                "PAST-K1L2-M3N4-O5P6-Q7R8", "PAST-S9T0-U1V2-W3X4-Y5Z6",
+                "PAST-A7B8-C9D0-E1F2-G3H4", "PAST-I5J6-K7L8-M9N0-O1P2",
+                "PAST-Q3R4-S5T6-U7V8-W9X0", "PAST-Y1Z2-A3B4-C5D6-E7F8",
+                "PAST-G9H0-I1J2-K3L4-M5N6", "PAST-O7P8-Q9R0-S1T2-U3V4",
+                "PAST-W5X6-Y7Z8-A9B0-C1D2", "PAST-E3F4-G5H6-I7J8-K9L0",
+                "PAST-M1N2-O3P4-Q5R6-S7T8", "PAST-U9V0-W1X2-Y3Z4-A5B6",
+                "PAST-C7D8-E9F0-G1H2-I3J4", "PAST-K5L6-M7N8-O9P0-Q1R2",
+                "PAST-S3T4-U5V6-W7X8-Y9Z0", "PAST-A1B2-C3D4-E5F6-G7H8",
+                "PAST-I9J0-K1L2-M3N4-O5P6", "PAST-Q7R8-S9T0-U1V2-W3X4",
+                "PAST-Y5Z6-A7B8-C9D0-E1F2", "PAST-G3H4-I5J6-K7L8-M9N0",
+                "PAST-O1P2-Q3R4-S5T6-U7V8", "PAST-W9X0-Y1Z2-A3B4-C5D6",
+                "PAST-E7F8-G9H0-I1J2-K3L4", "PAST-M5N6-O7P8-Q9R0-S1T2",
+                "PAST-U3V4-W5X6-Y7Z8-A9B0", "PAST-C1D2-E3F4-G5H6-I7J8",
+                "PAST-K9L0-M1N2-O3P4-Q5R6", "PAST-S7T8-U9V0-W1X2-Y3Z4",
+                "PAST-A5B6-C7D8-E9F0-G1H2", "PAST-I3J4-K5L6-M7N8-O9P0",
+                "PAST-Q1R2-S3T4-U5V6-W7X8", "PAST-Y9Z0-A1B2-C3D4-E5F6",
+                "PAST-G7H8-I9J0-K1L2-M3N4", "PAST-O5P6-Q7R8-S9T0-U1V2",
+                "PAST-W3X4-Y5Z6-A7B8-C9D0", "PAST-E1F2-G3H4-I5J6-K7L8",
+                "PAST-M9N0-O1P2-Q3R4-S5T6", "PAST-U7V8-W9X0-Y1Z2-A3B4",
+                "PAST-C5D6-E7F8-G9H0-I1J2", "PAST-K3L4-M5N6-O7P8-Q9R0",
+                "PAST-S1T2-U3V4-W5X6-Y7Z8", "PAST-A9B0-C1D2-E3F4-G5H6",
+                "PAST-I7J8-K9L0-M1N2-O3P4", "PAST-Q5R6-S7T8-U9V0-W1X2",
+                "PAST-Y3Z4-A5B6-C7D8-E9F0", "PAST-G1H2-I3J4-K5L6-M7N8",
+                "PAST-O9P0-Q1R2-S3T4-U5V6", "PAST-W7X8-Y9Z0-A1B2-C3D4",
+                "PAST-E5F6-G7H8-I9J0-K1L2", "PAST-M3N4-O5P6-Q7R8-S9T0",
+                "PAST-U1V2-W3X4-Y5Z6-A7B8", "PAST-C9D0-E1F2-G3H4-I5J6",
+                "PAST-K7L8-M9N0-O1P2-Q3R4", "PAST-S5T6-U7V8-W9X0-Y1Z2",
+                "PAST-A3B4-C5D6-E7F8-G9H0", "PAST-I1J2-K3L4-M5N6-O7P8",
+                "PAST-Q9R0-S1T2-U3V4-W5X6", "PAST-Y7Z8-A9B0-C1D2-E3F4",
+                "PAST-G5H6-I7J8-K9L0-M1N2", "PAST-O3P4-Q5R6-S7T8-U9V0",
+                "PAST-W1X2-Y3Z4-A5B6-C7D8", "PAST-E9F0-G1H2-I3J4-K5L6",
+                "PAST-M7N8-O9P0-Q1R2-S3T4", "PAST-U5V6-W7X8-Y9Z0-A1B2",
+                "PAST-C3D4-E5F6-G7H8-I9J0", "PAST-K1L2-M3N4-O5P6-Q7R8",
+                "PAST-S9T0-U1V2-W3X4-Y5Z6", "PAST-A7B8-C9D0-E1F2-G3H4",
+                "PAST-I5J6-K7L8-M9N0-O1P2", "PAST-Q3R4-S5T6-U7V8-W9X0",
+                "PAST-Y1Z2-A3B4-C5D6-E7F8", "PAST-G9H0-I1J2-K3L4-M5N6",
+                "PAST-O7P8-Q9R0-S1T2-U3V4", "PAST-W5X6-Y7Z8-A9B0-C1D2",
+                "PAST-E3F4-G5H6-I7J8-K9L0", "PAST-M1N2-O3P4-Q5R6-S7T8",
+                "PAST-U9V0-W1X2-Y3Z4-A5B6", "PAST-C7D8-E9F0-G1H2-I3J4",
+                "PAST-K5L6-M7N8-O9P0-Q1R2", "PAST-S3T4-U5V6-W7X8-Y9Z0",
+                "PAST-A1B2-C3D4-E5F6-G7H8", "PAST-I9J0-K1L2-M3N4-O5P6",
+                "PAST-Q7R8-S9T0-U1V2-W3X4", "PAST-Y5Z6-A7B8-C9D0-E1F2",
+                "PAST-G3H4-I5J6-K7L8-M9N0", "PAST-O1P2-Q3R4-S5T6-U7V8",
+                "PAST-W9X0-Y1Z2-A3B4-C5D6", "PAST-E7F8-G9H0-I1J2-K3L4",
+                "PAST-M5N6-O7P8-Q9R0-S1T2", "PAST-U3V4-W5X6-Y7Z8-A9B0",
+                "PAST-C1D2-E3F4-G5H6-I7J8", "PAST-K9L0-M1N2-O3P4-Q5R6",
+                "PAST-S7T8-U9V0-W1X2-Y3Z4", "PAST-A5B6-C7D8-E9F0-G1H2",
+                "PAST-I3J4-K5L6-M7N8-O9P0", "PAST-Q1R2-S3T4-U5V6-W7X8",
+                "PAST-Y9Z0-A1B2-C3D4-E5F6", "PAST-G7H8-I9J0-K1L2-M3N4",
+                "PAST-O5P6-Q7R8-S9T0-U1V2", "PAST-W3X4-Y5Z6-A7B8-C9D0",
+                "PAST-E1F2-G3H4-I5J6-K7L8", "PAST-M9N0-O1P2-Q3R4-S5T6",
+                "PAST-U7V8-W9X0-Y1Z2-A3B4", "PAST-C5D6-E7F8-G9H0-I1J2",
+                "PAST-K3L4-M5N6-O7P8-Q9R0", "PAST-S1T2-U3V4-W5X6-Y7Z8",
+                "PAST-A9B0-C1D2-E3F4-G5H6", "PAST-I7J8-K9L0-M1N2-O3P4",
+                "PAST-Q5R6-S7T8-U9V0-W1X2", "PAST-Y3Z4-A5B6-C7D8-E9F0",
+                "PAST-G1H2-I3J4-K5L6-M7N8", "PAST-O9P0-Q1R2-S3T4-U5V6",
+                "PAST-W7X8-Y9Z0-A1B2-C3D4", "PAST-E5F6-G7H8-I9J0-K1L2",
+                "PAST-M3N4-O5P6-Q7R8-S9T0", "PAST-U1V2-W3X4-Y5Z6-A7B8",
+                "PAST-C9D0-E1F2-G3H4-I5J6", "PAST-K7L8-M9N0-O1P2-Q3"
+            ];
+            
+            // Variables para control de intentos
+            let attempts = 0;
+            const maxAttempts = 5;
+            const blockTime = 30000; // 30 segundos de bloqueo
+            
+            // Obtener datos de acceso guardados
+            let accessData = JSON.parse(localStorage.getItem('pastelometroAccessData')) || {};
+            
+            // Verificar si hay un bloqueo activo
+            if (accessData.blockedUntil && new Date().getTime() < accessData.blockedUntil) {
+                const remainingTime = Math.ceil((accessData.blockedUntil - new Date().getTime()) / 1000);
+                errorMessage.textContent = `Demasiados intentos fallidos. Por favor espere ${remainingTime} segundos antes de intentar nuevamente.`;
+                errorMessage.classList.remove('hidden');
+                loginBtn.disabled = true;
+                
+                setTimeout(() => {
+                    loginBtn.disabled = false;
+                    errorMessage.classList.add('hidden');
+                }, accessData.blockedUntil - new Date().getTime());
+            }
+            
+            // Formatear automáticamente el código de acceso
+            accessCodeInput.addEventListener('input', function(e) {
+                let value = e.target.value.toUpperCase();
+                
+                // Eliminar cualquier carácter que no sea alfanumérico o guión
+                value = value.replace(/[^A-Z0-9-]/g, '');
+                
+                // Asegurar que "PAST-" esté al inicio
+                if (!value.startsWith('PAST-') && value.length > 0) {
+                    value = 'PAST-' + value.replace(/^PAST-?/, '');
+                }
+                
+                // Añadir guiones cada 4 caracteres después de "PAST-"
+                if (value.length > 5) {
+                    let parts = value.split('-');
+                    let mainPart = parts.slice(1).join('');
+                    let formatted = 'PAST-';
+                    
+                    for (let i = 0; i < mainPart.length; i++) {
+                        if (i > 0 && i % 4 === 0) {
+                            formatted += '-';
+                        }
+                        formatted += mainPart[i];
+                    }
+                    
+                    value = formatted;
+                }
+                
+                e.target.value = value;
+            });
+            
+            // Manejar el evento de clic en el botón de acceso
+            loginBtn.addEventListener('click', function() {
+                const code = accessCodeInput.value.trim();
+                
+                // Validar el formato del código
+                if (!codeRegex.test(code)) {
+                    errorMessage.textContent = 'Formato de código inválido. Use el formato: PAST-XXXX-XXXX-XXXX-XXXX';
+                    errorMessage.classList.remove('hidden');
+                    successMessage.classList.add('hidden');
+                    return;
+                }
+                
+                // Verificar si el código es válido
+                if (validCodes.includes(code)) {
+                    // Verificar límite de dispositivos (máximo 3)
+                    if (!accessData[code]) {
+                        accessData[code] = { devices: 1, lastAccess: new Date().getTime() };
+                    } else if (accessData[code].devices >= 3) {
+                        errorMessage.textContent = 'Este código ya ha sido utilizado en el máximo de dispositivos permitidos (3).';
+                        errorMessage.classList.remove('hidden');
+                        successMessage.classList.add('hidden');
+                        return;
+                    } else {
+                        accessData[code].devices++;
+                        accessData[code].lastAccess = new Date().getTime();
+                    }
+                    
+                    // Guardar datos de acceso
+                    localStorage.setItem('pastelometroAccessData', JSON.stringify(accessData));
+                    
+                    // Mostrar mensaje de éxito y redirigir
+                    loginSection.classList.add('hidden');
+                    loadingSection.classList.remove('hidden');
+                    
+                    setTimeout(() => {
+                        window.location.href = 'https://luishparedes.github.io/pastelometro/';
+                    }, 2000);
+                    
+                } else {
+                    // Código inválido
+                    attempts++;
+                    
+                    if (attempts >= maxAttempts) {
+                        // Bloquear temporalmente
+                        const blockedUntil = new Date().getTime() + blockTime;
+                        accessData.blockedUntil = blockedUntil;
+                        localStorage.setItem('pastelometroAccessData', JSON.stringify(accessData));
+                        
+                        errorMessage.textContent = `Demasiados intentos fallidos. Por favor espere ${blockTime/1000} segundos antes de intentar nuevamente.`;
+                        errorMessage.classList.remove('hidden');
+                        loginBtn.disabled = true;
+                        
+                        setTimeout(() => {
+                            loginBtn.disabled = false;
+                            errorMessage.classList.add('hidden');
+                            attempts = 0;
+                        }, blockTime);
+                    } else {
+                        errorMessage.textContent = `Código inválido. Intentos restantes: ${maxAttempts - attempts}`;
+                        errorMessage.classList.remove('hidden');
+                        
+                        if (attempts >= maxAttempts - 2) {
+                            errorMessage.classList.add('attempts-warning');
+                        }
+                    }
+                    
+                    successMessage.classList.add('hidden');
+                }
+            });
+            
+            // Permitir el acceso con la tecla Enter
+            accessCodeInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    loginBtn.click();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
