@@ -137,6 +137,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Obtener datos de acceso guardados
     let accessData = JSON.parse(localStorage.getItem('pastelometroAccessData')) || {};
     
+    // Verificar si hay un código guardado y cargarlo
+    if (accessData.lastUsedCode) {
+        accessCodeInput.value = accessData.lastUsedCode;
+    }
+    
     // Verificar si hay un bloqueo activo
     if (accessData.blockedUntil && new Date().getTime() < accessData.blockedUntil) {
         const remainingTime = Math.ceil((accessData.blockedUntil - new Date().getTime()) / 1000);
@@ -195,6 +200,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Verificar si el código es válido
         if (getValidCodes().includes(code)) {
+            // Guardar el código utilizado para recordarlo
+            accessData.lastUsedCode = code;
+            
             // Verificar límite de dispositivos (máximo 3)
             if (!accessData[code]) {
                 accessData[code] = { devices: 1, lastAccess: new Date().getTime() };
