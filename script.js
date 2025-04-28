@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded', function() {
         "UEFTVFczWDQtWTVaNi1BN0I4LUM5RDA=", "UEFTVEUxRjItRzNINC1JNUo2LUs3TDg=",
         "UEFTVE05TjAtTzFQMi1RM1I0LVM1VDY=", "UEFTVFU3VjgtVzlYMC1ZMVoyLUEzQjQ=",
         "UEFTVEM1RDYtRTdGOC1HOUgwLUkxSjI=", "UEFTVEtNM0w0LU01TjYtTzdQOC1ROVIw"
+        
     ];
 
     // Función para decodificar los códigos
@@ -136,6 +137,16 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Obtener datos de acceso guardados
     let accessData = JSON.parse(localStorage.getItem('pastelometroAccessData')) || {};
+    
+    // Generar un ID único para el dispositivo actual
+    function getDeviceId() {
+        let deviceId = localStorage.getItem('pastelometroDeviceId');
+        if (!deviceId) {
+            deviceId = 'device-' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('pastelometroDeviceId', deviceId);
+        }
+        return deviceId;
+    }
     
     // Verificar si hay un código guardado y cargarlo
     if (accessData.lastUsedCode) {
@@ -155,19 +166,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }, accessData.blockedUntil - new Date().getTime());
     }
     
-    // Formatear automáticamente el código de acceso
+    // Formatear automáticamente el código de acceso (se mantiene igual)
     accessCodeInput.addEventListener('input', function(e) {
         let value = e.target.value.toUpperCase();
-        
-        // Eliminar cualquier carácter que no sea alfanumérico o guión
         value = value.replace(/[^A-Z0-9-]/g, '');
         
-        // Asegurar que "PAST-" esté al inicio
         if (!value.startsWith('PAST-') && value.length > 0) {
             value = 'PAST-' + value.replace(/^PAST-?/, '');
         }
         
-        // Añadir guiones cada 4 caracteres después de "PAST-"
         if (value.length > 5) {
             let parts = value.split('-');
             let mainPart = parts.slice(1).join('');
@@ -189,6 +196,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Manejar el evento de clic en el botón de acceso
     loginBtn.addEventListener('click', function() {
         const code = accessCodeInput.value.trim();
+        const deviceId = getDeviceId();
         
         // Validar el formato del código
         if (!codeRegex.test(code)) {
@@ -203,18 +211,32 @@ document.addEventListener('DOMContentLoaded', function() {
             // Guardar el código utilizado para recordarlo
             accessData.lastUsedCode = code;
             
-            // Verificar límite de dispositivos (máximo 3)
+            // Inicializar estructura para este código si no existe
             if (!accessData[code]) {
-                accessData[code] = { devices: 1, lastAccess: new Date().getTime() };
-            } else if (accessData[code].devices >= 3) {
-                errorMessage.textContent = 'Este código ya ha sido utilizado en el máximo de dispositivos permitidos (3).';
-                errorMessage.classList.remove('hidden');
-                successMessage.classList.add('hidden');
-                return;
-            } else {
-                accessData[code].devices++;
-                accessData[code].lastAccess = new Date().getTime();
+                accessData[code] = {
+                    devices: {}, // Ahora usamos un objeto para registrar dispositivos
+                    lastAccess: new Date().getTime()
+                };
             }
+            
+            // Registrar el dispositivo actual
+            if (!accessData[code].devices[deviceId]) {
+                accessData[code].devices[deviceId] = new Date().getTime();
+                
+                // Contar dispositivos únicos
+                const deviceCount = Object.keys(accessData[code].devices).length;
+                
+                if (deviceCount > 3) {
+                    errorMessage.textContent = 'Este código ya ha sido utilizado en el máximo de dispositivos permitidos (3).';
+                    errorMessage.classList.remove('hidden');
+                    successMessage.classList.add('hidden');
+                    return;
+                }
+            }
+            
+            // Actualizar último acceso
+            accessData[code].lastAccess = new Date().getTime();
+            accessData[code].devices[deviceId] = new Date().getTime();
             
             // Guardar datos de acceso
             localStorage.setItem('pastelometroAccessData', JSON.stringify(accessData));
@@ -228,11 +250,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 2000);
             
         } else {
-            // Código inválido
+            // Código inválido (se mantiene igual)
             attempts++;
             
             if (attempts >= maxAttempts) {
-                // Bloquear temporalmente
                 const blockedUntil = new Date().getTime() + blockTime;
                 accessData.blockedUntil = blockedUntil;
                 localStorage.setItem('pastelometroAccessData', JSON.stringify(accessData));
