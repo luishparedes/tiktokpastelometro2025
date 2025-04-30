@@ -7,12 +7,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const loginSection = document.getElementById('login-section');
     const loadingSection = document.getElementById('loading-section');
     
-    // Expresión regular para validar el formato del código
-    const codeRegex = /^PAST-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
+    // Configuración
+    const CODE_PREFIX = 'PAST-';
+    const CODE_REGEX = /^PAST-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
+    const MAX_ATTEMPTS = 5;
+    const BLOCK_TIME = 30000; // 30 segundos
+    const MAX_DEVICES = 3;
     
-    // Lista de códigos válidos codificados en Base64
-    const encodedCodes = [
-        "UEFTVC0xQTJCLTNDNEQtNUU2Ri03RzhI", "UEFTVC05STA5Si1LMUwyLU0zTjQtTzVQNg==",
+    // Códigos válidos (codificados en Base64)
+    const VALID_CODES = [
+         "UEFTVC0xQTJCLTNDNEQtNUU2Ri03RzhI", "UEFTVC05STA5Si1LMUwyLU0zTjQtTzVQNg==",
         "UEFTVC1RN1I4LVM5VDAtVTFWMi1XM1g0", "UEFTVC1ZNVpBLUE3QjgtQzlEMC1FMUYy",
         "UEFTVC1HM0g0LUk1SjYtSzdMOC1NOU4w", "UEFTVC1PMVAyLVEzUjQtUzVUNi1VN1Y4",
         "UEFTVC1XOVgwLVkxWjItQTNCNS1DNVQ2", "UEFTVC1FN0Y4LUc5SDAtSTFKMitLM0w0",
@@ -123,22 +127,13 @@ document.addEventListener('DOMContentLoaded', function() {
         "UEFTVE05TjAtTzFQMi1RM1I0LVM1VDY=", "UEFTVFU3VjgtVzlYMC1ZMVoyLUEzQjQ=",
         "UEFTVEM1RDYtRTdGOC1HOUgwLUkxSjI=", "UEFTVEtNM0w0LU01TjYtTzdQOC1ROVIw"
         
-    ];
+    ].map(code => atob(code)); // Decodificar directamente
 
-    // Función para decodificar los códigos
-    function getValidCodes() {
-        return encodedCodes.map(code => atob(code));
-    }
-
-    // Variables para control de intentos
+    // Variables de estado
     let attempts = 0;
-    const maxAttempts = 5;
-    const blockTime = 30000; // 30 segundos de bloqueo
-    
-    // Obtener datos de acceso guardados
     let accessData = JSON.parse(localStorage.getItem('pastelometroAccessData')) || {};
-    
-    // Generar un ID único para el dispositivo actual
+
+    // Generar ID de dispositivo único
     function getDeviceId() {
         let deviceId = localStorage.getItem('pastelometroDeviceId');
         if (!deviceId) {
@@ -147,143 +142,141 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return deviceId;
     }
-    
-    // Verificar si hay un código guardado y cargarlo
-    if (accessData.lastUsedCode) {
-        accessCodeInput.value = accessData.lastUsedCode;
+
+    // Verificar bloqueo por intentos fallidos
+    function checkBlockStatus() {
+        if (accessData.blockedUntil && Date.now() < accessData.blockedUntil) {
+            const remainingTime = Math.ceil((accessData.blockedUntil - Date.now()) / 1000);
+            errorMessage.textContent = `Demasiados intentos fallidos. Por favor espere ${remainingTime} segundos antes de intentar nuevamente.`;
+            errorMessage.classList.remove('hidden');
+            loginBtn.disabled = true;
+            
+            setTimeout(() => {
+                loginBtn.disabled = false;
+                errorMessage.classList.add('hidden');
+            }, accessData.blockedUntil - Date.now());
+            
+            return true;
+        }
+        return false;
     }
-    
-    // Verificar si hay un bloqueo activo
-    if (accessData.blockedUntil && new Date().getTime() < accessData.blockedUntil) {
-        const remainingTime = Math.ceil((accessData.blockedUntil - new Date().getTime()) / 1000);
-        errorMessage.textContent = `Demasiados intentos fallidos. Por favor espere ${remainingTime} segundos antes de intentar nuevamente.`;
-        errorMessage.classList.remove('hidden');
-        loginBtn.disabled = true;
+
+    // Formatear código de entrada
+    function formatCodeInput(value) {
+        value = value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
         
-        setTimeout(() => {
-            loginBtn.disabled = false;
-            errorMessage.classList.add('hidden');
-        }, accessData.blockedUntil - new Date().getTime());
-    }
-    
-    // Formatear automáticamente el código de acceso (se mantiene igual)
-    accessCodeInput.addEventListener('input', function(e) {
-        let value = e.target.value.toUpperCase();
-        value = value.replace(/[^A-Z0-9-]/g, '');
-        
-        if (!value.startsWith('PAST-') && value.length > 0) {
-            value = 'PAST-' + value.replace(/^PAST-?/, '');
+        if (!value.startsWith(CODE_PREFIX) && value.length > 0) {
+            value = CODE_PREFIX + value.replace(/^PAST-?/, '');
         }
         
-        if (value.length > 5) {
-            let parts = value.split('-');
-            let mainPart = parts.slice(1).join('');
-            let formatted = 'PAST-';
+        if (value.length > CODE_PREFIX.length) {
+            const parts = value.split('-');
+            const mainPart = parts.slice(1).join('');
+            let formatted = CODE_PREFIX;
             
             for (let i = 0; i < mainPart.length; i++) {
-                if (i > 0 && i % 4 === 0) {
-                    formatted += '-';
-                }
+                if (i > 0 && i % 4 === 0) formatted += '-';
                 formatted += mainPart[i];
             }
             
             value = formatted;
         }
         
-        e.target.value = value;
-    });
-    
-    // Manejar el evento de clic en el botón de acceso
-    loginBtn.addEventListener('click', function() {
-        const code = accessCodeInput.value.trim();
+        return value;
+    }
+
+    // Validar código y manejar acceso
+    function validateAndLogin(code) {
         const deviceId = getDeviceId();
         
-        // Validar el formato del código
-        if (!codeRegex.test(code)) {
-            errorMessage.textContent = 'Formato de código inválido. Use el formato: PAST-XXXX-XXXX-XXXX-XXXX';
-            errorMessage.classList.remove('hidden');
-            successMessage.classList.add('hidden');
+        if (!CODE_REGEX.test(code)) {
+            showError('Formato de código inválido. Use el formato: PAST-XXXX-XXXX-XXXX-XXXX');
             return;
         }
         
-        // Verificar si el código es válido
-        if (getValidCodes().includes(code)) {
-            // Guardar el código utilizado para recordarlo
-            accessData.lastUsedCode = code;
-            
-            // Inicializar estructura para este código si no existe
-            if (!accessData[code]) {
-                accessData[code] = {
-                    devices: {}, // Ahora usamos un objeto para registrar dispositivos
-                    lastAccess: new Date().getTime()
-                };
-            }
-            
-            // Registrar el dispositivo actual
-            if (!accessData[code].devices[deviceId]) {
-                accessData[code].devices[deviceId] = new Date().getTime();
-                
-                // Contar dispositivos únicos
-                const deviceCount = Object.keys(accessData[code].devices).length;
-                
-                if (deviceCount > 3) {
-                    errorMessage.textContent = 'Este código ya ha sido utilizado en el máximo de dispositivos permitidos (3).';
-                    errorMessage.classList.remove('hidden');
-                    successMessage.classList.add('hidden');
-                    return;
-                }
-            }
-            
-            // Actualizar último acceso
-            accessData[code].lastAccess = new Date().getTime();
-            accessData[code].devices[deviceId] = new Date().getTime();
-            
-            // Guardar datos de acceso
+        if (VALID_CODES.includes(code)) {
+            handleValidCode(code, deviceId);
+        } else {
+            handleInvalidCode();
+        }
+    }
+
+    function handleValidCode(code, deviceId) {
+        // Inicializar datos para este código si no existen
+        if (!accessData[code]) {
+            accessData[code] = {
+                devices: {},
+                lastAccess: Date.now()
+            };
+        }
+        
+        // Registrar dispositivo
+        accessData[code].devices[deviceId] = Date.now();
+        
+        // Verificar límite de dispositivos
+        const deviceCount = Object.keys(accessData[code].devices).length;
+        if (deviceCount > MAX_DEVICES) {
+            showError(`Este código ya ha sido utilizado en el máximo de dispositivos permitidos (${MAX_DEVICES}).`);
+            return;
+        }
+        
+        // Actualizar datos
+        accessData.lastUsedCode = code;
+        accessData[code].lastAccess = Date.now();
+        localStorage.setItem('pastelometroAccessData', JSON.stringify(accessData));
+        
+        // Redirigir
+        loginSection.classList.add('hidden');
+        loadingSection.classList.remove('hidden');
+        setTimeout(() => {
+            window.location.href = 'https://luishparedes.github.io/pastelometro/';
+        }, 2000);
+    }
+
+    function handleInvalidCode() {
+        attempts++;
+        
+        if (attempts >= MAX_ATTEMPTS) {
+            accessData.blockedUntil = Date.now() + BLOCK_TIME;
             localStorage.setItem('pastelometroAccessData', JSON.stringify(accessData));
             
-            // Mostrar mensaje de éxito y redirigir
-            loginSection.classList.add('hidden');
-            loadingSection.classList.remove('hidden');
+            showError(`Demasiados intentos fallidos. Por favor espere ${BLOCK_TIME/1000} segundos antes de intentar nuevamente.`);
+            loginBtn.disabled = true;
             
             setTimeout(() => {
-                window.location.href = 'https://luishparedes.github.io/pastelometro/';
-            }, 2000);
-            
+                loginBtn.disabled = false;
+                errorMessage.classList.add('hidden');
+                attempts = 0;
+            }, BLOCK_TIME);
         } else {
-            // Código inválido (se mantiene igual)
-            attempts++;
-            
-            if (attempts >= maxAttempts) {
-                const blockedUntil = new Date().getTime() + blockTime;
-                accessData.blockedUntil = blockedUntil;
-                localStorage.setItem('pastelometroAccessData', JSON.stringify(accessData));
-                
-                errorMessage.textContent = `Demasiados intentos fallidos. Por favor espere ${blockTime/1000} segundos antes de intentar nuevamente.`;
-                errorMessage.classList.remove('hidden');
-                loginBtn.disabled = true;
-                
-                setTimeout(() => {
-                    loginBtn.disabled = false;
-                    errorMessage.classList.add('hidden');
-                    attempts = 0;
-                }, blockTime);
-            } else {
-                errorMessage.textContent = `Código inválido. Intentos restantes: ${maxAttempts - attempts}`;
-                errorMessage.classList.remove('hidden');
-                
-                if (attempts >= maxAttempts - 2) {
-                    errorMessage.classList.add('attempts-warning');
-                }
-            }
-            
-            successMessage.classList.add('hidden');
+            showError(`Código inválido. Intentos restantes: ${MAX_ATTEMPTS - attempts}`, attempts >= MAX_ATTEMPTS - 2);
         }
+    }
+
+    function showError(message, isWarning = false) {
+        errorMessage.textContent = message;
+        errorMessage.classList.remove('hidden');
+        if (isWarning) errorMessage.classList.add('attempts-warning');
+        successMessage.classList.add('hidden');
+    }
+
+    // Inicialización
+    if (accessData.lastUsedCode) {
+        accessCodeInput.value = accessData.lastUsedCode;
+    }
+    
+    checkBlockStatus();
+
+    // Event Listeners
+    accessCodeInput.addEventListener('input', function(e) {
+        e.target.value = formatCodeInput(e.target.value);
     });
     
-    // Permitir el acceso con la tecla Enter
+    loginBtn.addEventListener('click', function() {
+        validateAndLogin(accessCodeInput.value.trim());
+    });
+    
     accessCodeInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            loginBtn.click();
-        }
+        if (e.key === 'Enter') loginBtn.click();
     });
 });
